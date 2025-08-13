@@ -1,6 +1,5 @@
 package org.typefox.oct.actions
 
-import com.intellij.concurrency.resetThreadContext
 import com.intellij.icons.AllIcons
 import com.intellij.icons.ExpUiIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -16,7 +15,6 @@ import com.intellij.util.containers.toArray
 import org.typefox.oct.*
 import org.typefox.oct.settings.OCTSettings
 import java.util.concurrent.CompletableFuture
-import javax.swing.JPanel
 import javax.swing.JTextField
 
 

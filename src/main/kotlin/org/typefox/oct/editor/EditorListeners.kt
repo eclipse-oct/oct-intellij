@@ -45,3 +45,22 @@ class EditorCaretListener(private val octService: OCTMessageHandler.OCTService, 
         )
     }
 }
+
+class EditorSelectionListener(private val octService: OCTMessageHandler.OCTService, private val path: String) :
+    SelectionListener {
+    override fun selectionChanged(event: SelectionEvent) {
+        val selectionModel = event.editor.selectionModel
+        val selectionStart = selectionModel.selectionStart
+        val selectionEnd = selectionModel.selectionEnd
+        octService.updateTextSelection(
+            path, arrayOf(
+                ClientTextSelection(
+                    "", // by default its always oneself
+                    selectionStart,
+                    selectionEnd,
+                    selectionEnd < selectionStart
+                )
+            )
+        )
+    }
+}

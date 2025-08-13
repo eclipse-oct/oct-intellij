@@ -18,10 +18,12 @@ import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.ui.JBColor
 import org.typefox.oct.ClientTextSelection
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.OCTSessionService
 import org.typefox.oct.TextDocumentInsert
+import java.awt.Color
 import javax.swing.SwingUtilities
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
@@ -64,7 +66,7 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
 
     private fun registerEditor(editor: Editor) {
         if(editor.virtualFile == null) {
-            return;
+            return
         }
         val path = octPathFromEditor(editor)
 
@@ -75,6 +77,7 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
         documentListeners[path] = EditorDocumentListener(octService, path)
         editor.document.addDocumentListener(documentListeners[path]!!)
         editor.caretModel.addCaretListener(EditorCaretListener(octService, path))
+        editor.selectionModel.addSelectionListener(EditorSelectionListener(octService, path))
     }
 
     fun updateTextSelection(path: String, selections: Array<ClientTextSelection>) {
@@ -97,7 +100,7 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
                     editors[path]?.scrollingModel?.scrollTo(
                         LogicalPosition(selection.start, selection.end ?: selection.start), ScrollType.CENTER)
                 }
-                break;
+                break
             }
         }
 
@@ -119,11 +122,12 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
         val start = selection.start
         val end = selection.end ?: selection.start
         if (start != end) {
+            val highlightColor = Color(color.red, color.green, color.blue, 50)
             textHighlighter = editor.markupModel.addRangeHighlighter(
                 start,
-                end,
+                end,+
                 HighlighterLayer.CARET_ROW + 1,
-                TextAttributes(null, color, null, null, 0),
+                TextAttributes(null, JBColor(highlightColor, highlightColor), null, null, 0),
                 HighlighterTargetArea.EXACT_RANGE
             )
         }
