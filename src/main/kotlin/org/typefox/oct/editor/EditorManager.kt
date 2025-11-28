@@ -17,6 +17,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.JBColor
 import org.typefox.oct.ClientTextSelection
@@ -24,12 +25,13 @@ import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.OCTSessionService
 import org.typefox.oct.TextDocumentInsert
 import java.awt.Color
+import java.io.FileNotFoundException
 import javax.swing.SwingUtilities
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
 
 
-class EditorManager(private val octService: OCTMessageHandler.OCTService, val project: Project) :
+class EditorManager(private val octService: OCTMessageHandler.OCTService, val project: Project, private val isHost: Boolean) :
     EditorFactoryListener {
     private val editors: MutableMap<String, Editor> = mutableMapOf()
     private val cursorDisposables: MutableMap<String, Array<Inlay<CursorRenderer>>> = mutableMapOf()
@@ -61,7 +63,6 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
         val path = octPathFromEditor(event.editor)
         editors.remove(path)
         event.editor.document.removeDocumentListener(documentListeners.remove(path)!!)
-
     }
 
     private fun registerEditor(editor: Editor) {
@@ -74,7 +75,7 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
 
         octService.openDocument("text", path, editor.document.text)
 
-        documentListeners[path] = EditorDocumentListener(octService, path)
+        documentListeners[path] = EditorDocumentListener(octService, path, editor.project!!)
         editor.document.addDocumentListener(documentListeners[path]!!)
         editor.caretModel.addCaretListener(EditorCaretListener(octService, path))
         editor.selectionModel.addSelectionListener(EditorSelectionListener(octService, path))
@@ -141,7 +142,16 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
     }
 
     fun updateDocument(path: String, updates: Array<TextDocumentInsert>) {
-        val editor = editors[path] ?: return
+        var editor = editors[path]
+        if (editors[path] == null) {
+            val file = LocalFileSystem.getInstance().findFileByPath(path) ?: throw FileNotFoundException("File not found: $path");
+            val fileEditor = FileEditorManager.getInstance(project).openFile(file, false)[0];
+            if (fileEditor is TextEditor) {
+                editor = fileEditor.editor
+            }
+        }
+        editor ?: return
+
         WriteCommandAction.runWriteCommandAction(
             editor.project
         ) {

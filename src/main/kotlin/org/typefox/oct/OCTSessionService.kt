@@ -84,6 +84,9 @@ class OCTSessionService() {
 
         }.exceptionally {
             createErrorNotification(it, "Error Creating Room")
+            SwingUtilities.invokeLater {
+                loadingDialog.close(1)
+            }
             null
         }
     }

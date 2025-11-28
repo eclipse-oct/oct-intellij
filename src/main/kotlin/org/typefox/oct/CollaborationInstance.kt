@@ -26,7 +26,7 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
                             val isHost: Boolean) : Disposable {
 
     val workspaceFileSystem: WorkspaceFileSystemService = project.getService(WorkspaceFileSystemService::class.java)
-    private val editorManager: EditorManager = EditorManager(remoteInterface as OCTMessageHandler.OCTService, project)
+    private val editorManager: EditorManager = EditorManager(remoteInterface as OCTMessageHandler.OCTService, project, isHost)
 
     val guests: ArrayList<Peer> = ArrayList()
     var host: Peer? = null

@@ -1,15 +1,25 @@
 package org.typefox.oct.editor
 
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.event.*
+import com.intellij.openapi.project.Project
+import com.intellij.util.Alarm
+import com.intellij.util.Alarm.ThreadToUse
+import kotlinx.coroutines.flow.flow
 import org.typefox.oct.ClientTextSelection
+import org.typefox.oct.FileContent
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.TextDocumentInsert
 
 
-class EditorDocumentListener(private val octService: OCTMessageHandler.OCTService, private val path: String) :
+class EditorDocumentListener(private val octService: OCTMessageHandler.OCTService,
+                             private val path: String,
+                             private val project: Project):
     DocumentListener {
 
     var sendUpdates = true
+
+    private var isSyncing = false
 
     override fun documentChanged(event: DocumentEvent) {
         if(sendUpdates) {
@@ -17,12 +27,29 @@ class EditorDocumentListener(private val octService: OCTMessageHandler.OCTServic
             octService.updateDocument(
                 path, arrayOf(
                     TextDocumentInsert(
-                         offset,
+                        offset,
                         offset + event.oldFragment.length,
                         event.newFragment.toString()
                     )
                 )
             )
+        }
+        if(!isSyncing) {
+            syncDocument(event)
+        }
+    }
+
+    private fun syncDocument(event: DocumentEvent) {
+        isSyncing = true
+        octService.getDocumentContent(path).thenAccept { content ->
+            if (content != null && String(content.content) != event.document.text) {
+                WriteCommandAction.runWriteCommandAction(project) {
+                    sendUpdates = false
+                    event.document.setText(String(content.content))
+                    sendUpdates = true
+                    isSyncing = false
+                }
+            }
         }
     }
 }
