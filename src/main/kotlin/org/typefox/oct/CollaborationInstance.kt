@@ -17,7 +17,6 @@ import org.typefox.oct.fileSystem.WorkspaceFileSystemService
 import org.typefox.oct.messageHandlers.BaseMessageHandler
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.util.EventEmitter
-import kotlin.io.path.Path
 
 
 class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteInterface,
@@ -102,6 +101,12 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
 
     fun isFollowingPeer(peerId: String): Boolean {
         return editorManager.followingPeerId == peerId
+    }
+
+    fun editorOpened(documentPath: String, peerId: String) {
+        if(isHost) {
+            editorManager.guestOpenedEditor(documentPath)
+        }
     }
 
     override fun dispose() {

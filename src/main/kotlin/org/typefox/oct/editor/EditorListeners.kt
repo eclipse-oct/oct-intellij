@@ -3,11 +3,7 @@ package org.typefox.oct.editor
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.event.*
 import com.intellij.openapi.project.Project
-import com.intellij.util.Alarm
-import com.intellij.util.Alarm.ThreadToUse
-import kotlinx.coroutines.flow.flow
 import org.typefox.oct.ClientTextSelection
-import org.typefox.oct.FileContent
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.TextDocumentInsert
 
@@ -41,14 +37,17 @@ class EditorDocumentListener(private val octService: OCTMessageHandler.OCTServic
 
     private fun syncDocument(event: DocumentEvent) {
         isSyncing = true
-        octService.getDocumentContent(path).thenAccept { content ->
-            if (content != null && String(content.content) != event.document.text) {
+        octService.getDocumentContent(path).thenAccept { fileContent ->
+            val content = if(fileContent != null) String(fileContent.content) else null
+            if (content != null && !content.contentEquals(event.document.charsSequence)) {
                 WriteCommandAction.runWriteCommandAction(project) {
                     sendUpdates = false
-                    event.document.setText(String(content.content))
+                    event.document.setText(content)
                     sendUpdates = true
                     isSyncing = false
                 }
+            } else {
+                isSyncing = false
             }
         }
     }

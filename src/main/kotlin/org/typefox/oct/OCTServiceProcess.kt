@@ -76,7 +76,7 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
                         gson.registerTypeAdapter(it, BinaryDataAdapter(it))
                     }
                 }
-                .traceMessages(PrintWriter(System.out))
+                //.traceMessages(PrintWriter(System.out))
                 .create()
 
             this.jsonRpc?.startListening()

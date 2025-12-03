@@ -13,11 +13,14 @@ import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.TextEditor
+import com.intellij.openapi.project.BaseProjectDirectories.Companion.getBaseDirectories
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.JBColor
 import org.typefox.oct.ClientTextSelection
@@ -142,24 +145,18 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
     }
 
     fun updateDocument(path: String, updates: Array<TextDocumentInsert>) {
-        var editor = editors[path]
-        if (editors[path] == null) {
-            val file = LocalFileSystem.getInstance().findFileByPath(path) ?: throw FileNotFoundException("File not found: $path");
-            val fileEditor = FileEditorManager.getInstance(project).openFile(file, false)[0];
-            if (fileEditor is TextEditor) {
-                editor = fileEditor.editor
-            }
-        }
-        editor ?: return
+        val virtualFile = findFileByRelativePath(path)
+        val document = FileDocumentManager.getInstance().getDocument(findFileByRelativePath(path))
+            ?: throw IllegalStateException("Document for file $path not found")
 
         WriteCommandAction.runWriteCommandAction(
-            editor.project
+            project
         ) {
             val listener =  documentListeners[path]
             listener?.sendUpdates = false
             try {
                 for (update in updates) {
-                    editor.document.replaceString(
+                    document.replaceString(
                         update.startOffset,
                        update.endOffset ?: update.startOffset,
                         update.text.replace("\r\n", "\n")
@@ -168,9 +165,7 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
             } finally {
                 listener?.sendUpdates = true
             }
-
         }
-
     }
 
     private fun octPathFromEditor(editor: Editor): String {
@@ -186,5 +181,21 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
 
     fun stopFollowing() {
         followingPeerId = null
+    }
+
+    fun guestOpenedEditor(path: String) {
+        val document = FileDocumentManager.getInstance().getDocument(findFileByRelativePath(path))
+
+        octService.openDocument("text", path, document!!.text)
+    }
+
+    private fun findFileByRelativePath(path: String): VirtualFile {
+        val segments = path.split("/", "\\")
+            val baseDir = project.getBaseDirectories().find { dir -> segments[0] == dir.name  }
+            if (baseDir == null) {
+                throw FileNotFoundException("No shared folder found for file: $path")
+            }
+            val absolutePath = Path(baseDir.path).resolve(segments.drop(1).joinToString("/")).pathString
+            return LocalFileSystem.getInstance().findFileByPath(absolutePath) ?: throw FileNotFoundException("File not found: $path");
     }
 }
