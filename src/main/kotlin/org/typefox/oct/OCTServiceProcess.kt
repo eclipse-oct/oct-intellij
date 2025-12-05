@@ -56,7 +56,7 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
             val pluginPath: Path = plugin.pluginPath
             val executablePath: Path = pluginPath.resolve(EXECUTABLE_LOCATION)
             val savedAuthToken = ApplicationManager.getApplication().getService(AuthenticationService::class.java)
-                .getAuthToken(serverUr)
+                .getAuthToken(serverUrl)
 
             // start oct process
             currentProcess = ProcessBuilder()
