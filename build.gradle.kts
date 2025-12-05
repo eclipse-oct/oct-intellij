@@ -1,3 +1,5 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.9.25"
@@ -53,13 +55,33 @@ tasks {
     }
 
     prepareSandbox {
-        from("../../packages/open-collaboration-service-process/bin/oct-service-process.exe") {
-            into("${intellij.pluginName.get()}/lib")
-        }
+        dependsOn("copyExecutableToResources")
+    }
+
+    processResources {
+        dependsOn("copyExecutableToResources")
     }
 }
 
-tasks.register<Exec>("createExecutable") {
-    workingDir = file("../../packages/open-collaboration-service-process")
-    commandLine("npm", "run", "create:executable")
+val octProjectPath = project.property("org.typefox.oct-project-path")
+
+tasks.register<Copy>("copyExecutableToResources") {
+    dependsOn("createServiceProcessExecutable")
+    var executableName = "oct-service-process"
+    if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        executableName = "$executableName.exe"
+    }
+    from("${octProjectPath}/packages/open-collaboration-service-process/bin/$executableName")
+    into("$projectDir/src/main/resources/bin")
+
 }
+
+tasks.register<Exec>("createServiceProcessExecutable") {
+    workingDir = file( "${octProjectPath}/packages/open-collaboration-service-process")
+    var npmCommand = "npm"
+    if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+        npmCommand = "npm.cmd"
+    }
+    commandLine(npmCommand, "run", "create:executable")
+}
+

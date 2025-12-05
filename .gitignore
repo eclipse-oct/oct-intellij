@@ -42,3 +42,6 @@ bin/
 .DS_Store
 
 /assets
+
+### Igonre generated binaries ###
+src/main/resources/bin/

@@ -4,14 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.google.gson.Gson
 import com.google.gson.TypeAdapter
-import com.google.gson.TypeAdapterFactory
-import com.google.gson.reflect.TypeToken
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
 import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.extensions.PluginId
+import org.apache.tools.ant.taskdefs.condition.Os
 import org.eclipse.lsp4j.jsonrpc.Launcher
 import org.eclipse.lsp4j.jsonrpc.messages.Message
 import org.eclipse.lsp4j.jsonrpc.messages.NotificationMessage
@@ -19,15 +18,21 @@ import org.eclipse.lsp4j.jsonrpc.messages.RequestMessage
 import org.msgpack.jackson.dataformat.MessagePackFactory
 import org.typefox.oct.messageHandlers.BaseMessageHandler
 import org.typefox.oct.messageHandlers.OCTMessageHandler
-import java.io.PrintWriter
+import java.io.File
+import java.io.InputStream
+import java.nio.file.Files
 import java.nio.file.Path
-import java.util.Base64
+import java.nio.file.StandardCopyOption
+import java.util.*
 
-const val EXECUTABLE_LOCATION = "lib/oct-service-process.exe"
+
+const val EXECUTABLE_LOCATION = "bin/oct-service-process"
 
 class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List<BaseMessageHandler>) : Disposable {
     private var currentProcess: Process? = null
     private var jsonRpc: Launcher<BaseMessageHandler.BaseRemoteInterface>? = null
+
+    private var executablePath: Path? = null
 
     fun <T : BaseMessageHandler.BaseRemoteInterface> getOctService(): T {
         if(jsonRpc == null) {
@@ -41,21 +46,26 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
     }
 
     private fun startProcess() {
+        if (executablePath == null) {
+            extractExecutable()
+        }
+
         val pluginId = PluginId.getId("org.typefox.open-collaboration-intelliJ")
         val plugin = PluginManager.getInstance().findEnabledPlugin(pluginId)
         if (plugin != null) {
             val pluginPath: Path = plugin.pluginPath
             val executablePath: Path = pluginPath.resolve(EXECUTABLE_LOCATION)
             val savedAuthToken = ApplicationManager.getApplication().getService(AuthenticationService::class.java)
-                .getAuthToken(serverUrl)
+                .getAuthToken(serverUr)
+
             // start oct process
             currentProcess = ProcessBuilder()
-                //.command(executablePath.toString(), "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}")
-                .command(
-                    "node", "--inspect=23698",
-                    "C:\\Typefox\\Open_Source\\open-collaboration-tools\\packages\\open-collaboration-service-process\\lib\\process.js",
-                    "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}"
-                )
+                .command(executablePath.toString(), "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}")
+//                .command(
+//                    "node", "--inspect=23698",
+//                    "path/to/process.js",
+//                    "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}"
+//                )
                 .start()
             currentProcess?.onExit()?.thenRun {
                 println(
@@ -83,8 +93,31 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
         }
     }
 
+    private fun extractExecutable() {
+        var fileEnding = ""
+        if(Os.isFamily(Os.FAMILY_WINDOWS)) {
+            fileEnding += ".exe"
+        }
+
+        val binaryStream: InputStream = OCTServiceProcess::class.java.classLoader.getResourceAsStream(
+            "$EXECUTABLE_LOCATION$fileEnding")
+
+        val tempDir: Path = Files.createTempDirectory("oct-service-process-bin")
+        val tempBinaryPath = tempDir.resolve("oct-service-process$fileEnding")
+        val tempBinaryFile: File = tempBinaryPath.toFile()
+
+        Files.copy(binaryStream, tempBinaryPath, StandardCopyOption.REPLACE_EXISTING)
+
+        // Set executable permission (crucial for Linux/macOS)
+        tempBinaryFile.setExecutable(true)
+
+        executablePath = tempBinaryPath
+    }
+
     override fun dispose() {
         currentProcess?.destroy()
+        Files.delete(executablePath)
+        executablePath = null
     }
 
 }
