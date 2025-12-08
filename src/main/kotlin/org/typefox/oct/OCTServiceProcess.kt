@@ -53,8 +53,6 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
         val pluginId = PluginId.getId("org.typefox.open-collaboration-intelliJ")
         val plugin = PluginManager.getInstance().findEnabledPlugin(pluginId)
         if (plugin != null) {
-            val pluginPath: Path = plugin.pluginPath
-            val executablePath: Path = pluginPath.resolve(EXECUTABLE_LOCATION)
             val savedAuthToken = ApplicationManager.getApplication().getService(AuthenticationService::class.java)
                 .getAuthToken(serverUrl)
 
@@ -63,7 +61,7 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
                 .command(executablePath.toString(), "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}")
 //                .command(
 //                    "node", "--inspect=23698",
-//                    "path/to/process.js",
+//                    "C:\\Typefox\\Open_Source\\open-collaboration-tools\\packages\\open-collaboration-service-process\\lib\\bundle.cjs",
 //                    "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}"
 //                )
                 .start()
@@ -73,6 +71,8 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
                         ?.toString(Charsets.UTF_8)
                 )
                 currentProcess = null
+                Files.delete(executablePath?.parent)
+                executablePath = null
             }
 
             this.jsonRpc = Launcher.Builder<BaseMessageHandler.BaseRemoteInterface>()
@@ -116,8 +116,6 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
 
     override fun dispose() {
         currentProcess?.destroy()
-        Files.delete(executablePath)
-        executablePath = null
     }
 
 }
