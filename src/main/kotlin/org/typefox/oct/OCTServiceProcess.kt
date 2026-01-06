@@ -74,7 +74,6 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
                 Files.delete(executablePath?.parent)
                 executablePath = null
             }
-
             this.jsonRpc = Launcher.Builder<BaseMessageHandler.BaseRemoteInterface>()
                 .setLocalServices(messageHandlers)
                 .setClassLoader(OCTMessageHandler.OCTService::class.java.classLoader)

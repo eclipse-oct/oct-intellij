@@ -19,11 +19,18 @@ import org.typefox.oct.messageHandlers.FileSystemMessageHandler
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.sessionView.OCTSessionStatusBarWidgetFactory
 import org.typefox.oct.settings.OCTSettings
+import org.typefox.oct.util.Disposable
 import org.typefox.oct.util.EventEmitter
 import java.io.File
 import javax.swing.*
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.pathString
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.Task
+import com.intellij.openapi.application.ApplicationManager
+import io.grpc.netty.shaded.io.netty.util.concurrent.Future
+import org.eclipse.sisu.Nullable
+import java.util.concurrent.CompletableFuture
 
 val messageHandlers: Array<Class<out BaseMessageHandler>> = arrayOf(
     FileSystemMessageHandler::class.java,
@@ -51,13 +58,7 @@ class OCTSessionService() {
             return
         }
 
-        val loadingDialog = LoadingDialog(
-            project,
-            "Creating Room"
-        )
-        SwingUtilities.invokeLater {
-            loadingDialog.show()
-        }
+
         val serverUrl = service<OCTSettings>().state.defaultServerURL
 
         if (!currentProcesses.contains(project)) {
@@ -65,30 +66,24 @@ class OCTSessionService() {
         }
         val currentProcess = currentProcesses[project]!!
 
-        currentProcess.getOctService<OCTMessageHandler.OCTService>().createRoom(workspace).thenAccept { sessionData ->
-            // create session created message
-            val roomCreatedNotification =
-                Notification("Oct-Notifications", "Hosted session", NotificationType.INFORMATION)
-            roomCreatedNotification.addAction(CopyRoomTokenAction(sessionData.roomId) {
-                roomCreatedNotification.expire()
-            })
-            roomCreatedNotification.addAction(CopyRoomUrlAction(sessionData.roomId) {
-                roomCreatedNotification.expire()
-            })
-            Notifications.Bus.notify(roomCreatedNotification)
+        SessionCreationTask(project, "Creating room...",
+            currentProcess.getOctService<OCTMessageHandler.OCTService>().createRoom(workspace)
+                .exceptionally {
+                    createErrorNotification(it, "Error Creating Room")
+                    null
+                }) { sessionData ->
+                    val roomCreatedNotification =
+                        Notification("Oct-Notifications", "Hosted session", NotificationType.INFORMATION)
+                    roomCreatedNotification.addAction(CopyRoomTokenAction(sessionData.roomId) {
+                        roomCreatedNotification.expire()
+                    })
+                    roomCreatedNotification.addAction(CopyRoomUrlAction(sessionData.roomId) {
+                        roomCreatedNotification.expire()
+                    })
+                    Notifications.Bus.notify(roomCreatedNotification)
 
-            SwingUtilities.invokeAndWait {
-                loadingDialog.close(0)
-            }
-            sessionCreated(sessionData, serverUrl, project, true)
-
-        }.exceptionally {
-            createErrorNotification(it, "Error Creating Room")
-            SwingUtilities.invokeLater {
-                loadingDialog.close(1)
-            }
-            null
-        }
+                    sessionCreated(sessionData, serverUrl, project, true)
+                }.queue()
     }
 
     fun joinRoom(roomToken: String, project: Project?) {
@@ -98,26 +93,20 @@ class OCTSessionService() {
 
         val currentProcess = createServiceProcess(serverUrl)
 
-        val joiningDialog = LoadingDialog(project ?: ProjectManager.getInstance().defaultProject, "Joining Room...")
+        SessionCreationTask(project, "Joining room...", currentProcess.getOctService<OCTMessageHandler.OCTService>()
+            .joinRoom(roomToken)) { sessionData ->
+                ApplicationManager.getApplication().invokeLater {
+                    val projectDir = createTempDirectory(sessionData.workspace.name)
+                    val newProject = ProjectManager.getInstance().loadAndOpenProject(projectDir.pathString)
 
-        SwingUtilities.invokeLater {
-            joiningDialog.show()
-        }
-
-        currentProcess.getOctService<OCTMessageHandler.OCTService>().joinRoom(roomToken).thenAccept { sessionData ->
-            SwingUtilities.invokeAndWait {
-                joiningDialog.close(0)
-            }
-            val projectDir = createTempDirectory(sessionData.workspace.name)
-            val newProject = ProjectManager.getInstance().loadAndOpenProject(projectDir.pathString)
-                ?: throw IllegalStateException("Could not create project for session")
-            currentProcesses[newProject] = currentProcess
-            sessionCreated(sessionData, serverUrl, newProject, false)
-        }.exceptionally {
-            joiningDialog.close(0)
-            createErrorNotification(it, "Error Joining Room")
-            null
-        }
+                    if (newProject != null) {
+                        currentProcesses[newProject] = currentProcess
+                        sessionCreated(sessionData, serverUrl, newProject, false)
+                    } else {
+                        createErrorNotification(Throwable(), "Could not create project for session")
+                    }
+                }
+            }.queue()
     }
 
     fun closeCurrentSession(project: Project) {
@@ -166,7 +155,7 @@ class OCTSessionService() {
 
     private fun createServiceProcess(serverUrl: String): OCTServiceProcess {
         return OCTServiceProcess(serverUrl, messageHandlers.map {
-            it.getConstructor(EventEmitter::class.java).newInstance(onSessionCreated)
+            it.getConstructor(String::class.java, EventEmitter::class.java).newInstance(serverUrl, onSessionCreated)
         })
     }
 
@@ -181,25 +170,28 @@ class OCTSessionService() {
     }
 }
 
-class LoadingDialog(project: Project, val text: String) : DialogWrapper(project) {
+class SessionCreationTask(project: Project?, title: String,
+                          private val future: CompletableFuture<SessionData>,
+                          private val onComplete: ((SessionData) -> Unit)
+    ): Task.Backgroundable(project, title, true) {
 
-    init {
-        init()
-        buttonMap.clear()
+    override fun run(indicator: ProgressIndicator) {
+        indicator.isIndeterminate = true
+
+        while (!future.isDone) {
+            if (indicator.isCanceled) {
+                future.cancel(true)
+                return
+            }
+            Thread.sleep(100)
+        }
+
+        if (!future.isCompletedExceptionally) {
+            val sessionData = future.get()
+            onComplete(sessionData)
+        }
     }
 
-    override fun createCenterPanel(): JComponent {
-        return JLabel(
-            text,
-            AnimatedIcon.Default(),
-            SwingConstants.LEFT
-        )
-
-    }
-
-    override fun createSouthPanel(): JComponent {
-        return JPanel()
-    }
 }
 
 

@@ -9,7 +9,8 @@ import org.typefox.oct.util.EventEmitter
 import java.util.concurrent.CompletableFuture
 
 @JsonSegment("fileSystem")
-class FileSystemMessageHandler(onSessionCreated: EventEmitter<CollaborationInstance>) : BaseMessageHandler(onSessionCreated) {
+class FileSystemMessageHandler(serverUrl: String, onSessionCreated: EventEmitter<CollaborationInstance>) :
+    BaseMessageHandler(serverUrl, onSessionCreated) {
 
     @JsonSegment("fileSystem")
     interface FileSystemService: BaseRemoteInterface {

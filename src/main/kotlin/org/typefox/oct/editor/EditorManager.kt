@@ -1,5 +1,6 @@
 package org.typefox.oct.editor
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
@@ -109,7 +110,7 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
         }
 
         if(editor != null) {
-            SwingUtilities.invokeAndWait {
+            ApplicationManager.getApplication().invokeAndWait {
                 cursorDisposables[path]?.forEach { Disposer.dispose(it) }
                 cursorDisposables[path] = Array(selections.size) { idx ->
                     val selection = selections[idx]

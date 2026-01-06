@@ -63,6 +63,7 @@ class OCTSettingsComponent {
 class OCTSettings : PersistentStateComponent<OCTSettings.State>  {
   class State {
     var defaultServerURL: String = "https://api.open-collab.tools/"
+    var storedUserTokens: Array<String> = arrayOf()
   }
 
   private var myState = State()
@@ -81,6 +82,14 @@ class OCTSettings : PersistentStateComponent<OCTSettings.State>  {
   override fun loadState(state: State) {
     myState = state
   }
+
+  fun didStoreUserToken(url: String) {
+    var tokenIndex = myState.storedUserTokens.indexOf(url)
+    if(tokenIndex == -1) {
+      myState.storedUserTokens += url
+    }
+  }
+
 }
 
 

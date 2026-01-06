@@ -39,6 +39,8 @@
               description="Create an OCT Session"/>
       <action id="org.typefox.oct.CloseSession" class="org.typefox.oct.actions.CloseSessionAction" text="Close OCT Session"
               description="Close the current OCT Session"/>
+      <action id="org.typefox.oct.LogoutAction" class="org.typefox.oct.actions.LogoutAction" text="OCT Logout"
+              description="Logout from oct"/>
     </group>
   </actions>
   <extensions defaultExtensionNs="com.intellij">

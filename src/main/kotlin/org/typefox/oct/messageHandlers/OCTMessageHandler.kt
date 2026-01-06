@@ -18,7 +18,8 @@ import org.typefox.oct.util.EventEmitter
 import java.util.concurrent.CompletableFuture
 
 
-class OCTMessageHandler(onSessionCreated: EventEmitter<CollaborationInstance>) : BaseMessageHandler(onSessionCreated) {
+class OCTMessageHandler(serverUrl: String, onSessionCreated: EventEmitter<CollaborationInstance>) :
+    BaseMessageHandler(serverUrl, onSessionCreated) {
 
     interface OCTService: BaseRemoteInterface {
         @JsonRequest
@@ -42,7 +43,7 @@ class OCTMessageHandler(onSessionCreated: EventEmitter<CollaborationInstance>) :
 
     @JsonNotification
     fun authentication(token: String, metadata: AuthMetadata) {
-        service<AuthenticationService>().authenticate(token, metadata)
+        service<AuthenticationService>().authenticate(serverUrl, token, metadata)
     }
 
     @JsonNotification
@@ -114,7 +115,7 @@ class OCTMessageHandler(onSessionCreated: EventEmitter<CollaborationInstance>) :
     }
 }
 
-abstract class BaseMessageHandler(onSessionCreated: EventEmitter<CollaborationInstance>): Endpoint {
+abstract class BaseMessageHandler(val serverUrl: String, onSessionCreated: EventEmitter<CollaborationInstance>): Endpoint {
 
     protected var collaborationInstance: CollaborationInstance? = null
 

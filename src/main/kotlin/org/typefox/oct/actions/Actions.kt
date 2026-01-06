@@ -2,6 +2,7 @@ package org.typefox.oct.actions
 
 import com.intellij.icons.AllIcons
 import com.intellij.icons.ExpUiIcons
+import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -11,6 +12,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.modules
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.ui.DialogBuilder
+import com.intellij.remoteServer.util.CloudConfigurationUtil.createCredentialAttributes
+import com.intellij.ui.components.dialog
 import com.intellij.util.containers.toArray
 import org.typefox.oct.*
 import org.typefox.oct.settings.OCTSettings
@@ -50,13 +53,12 @@ class JoinSessionAction : AnAction() {
       .title("Room ID")
       .centerPanel(roomIdInput)
 
-    if (dialog.show() == 0) {
+    dialog.setOkOperation {
+      dialog.dialogWrapper.close(0)
       service<OCTSessionService>().joinRoom(roomIdInput.text, e.project)
-      dialog.dispose()
     }
-
+    dialog.show()
   }
-
 }
 
 class CloseSessionAction: AnAction() {
@@ -121,4 +123,24 @@ class ToggleFollowAction(val peerId: String, val project: Project) : AnAction(Al
         return ActionUpdateThread.EDT
     }
 
+}
+
+class LogoutAction : AnAction() {
+    override fun actionPerformed(e: AnActionEvent) {
+        val storedTokenUrls = service<OCTSettings>().state.storedUserTokens
+        for (url in storedTokenUrls) {
+            val attributes = createCredentialAttributes(OCT_TOKEN_SERVICE_KEY, url)!!
+            PasswordSafe.instance.set(attributes, null)
+        }
+        service<OCTSettings>().state.storedUserTokens = arrayOf()
+        e.presentation.isEnabled = false
+    }
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabled = service<OCTSettings>().state.storedUserTokens.isNotEmpty()
+    }
+
+    override fun getActionUpdateThread(): ActionUpdateThread {
+        return ActionUpdateThread.EDT
+    }
 }
