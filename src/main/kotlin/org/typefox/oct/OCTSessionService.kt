@@ -178,6 +178,8 @@ class SessionCreationTask(project: Project?, title: String,
     override fun run(indicator: ProgressIndicator) {
         indicator.isIndeterminate = true
 
+        future.thenAccept(onComplete)
+
         while (!future.isDone) {
             if (indicator.isCanceled) {
                 future.cancel(true)
@@ -186,10 +188,7 @@ class SessionCreationTask(project: Project?, title: String,
             Thread.sleep(100)
         }
 
-        if (!future.isCompletedExceptionally) {
-            val sessionData = future.get()
-            onComplete(sessionData)
-        }
+
     }
 
 }
