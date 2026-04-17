@@ -25,7 +25,11 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
                             val isHost: Boolean) : Disposable {
 
     val workspaceFileSystem: WorkspaceFileSystemService = project.getService(WorkspaceFileSystemService::class.java)
-    private val editorManager: EditorManager = EditorManager(remoteInterface as OCTMessageHandler.OCTService, project, isHost)
+    private val editorManager: EditorManager = EditorManager(
+        remoteInterface as OCTMessageHandler.OCTService,
+        project,
+        ::resolveSessionFile
+    )
 
     val guests: ArrayList<Peer> = ArrayList()
     var host: Peer? = null
@@ -56,6 +60,7 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
         onPeersChanged.fire(null)
     }
 
+
     fun peerJoined(peer: Peer) {
         this.guests.add(peer)
         this.onPeersChanged.fire(Unit)
@@ -68,7 +73,7 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
         this.onPeersChanged.fire(Unit)
     }
 
-    private fun initializeSharedFolders() {
+    internal fun initializeSharedFolders() {
         (VirtualFileManager.getInstance().getFileSystem("oct") as OCTSessionFileSystem)
             .registerRoots(sessionData.workspace.folders, this)
 
@@ -87,9 +92,19 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
         } catch (e: Throwable) {
             this.dispose()
             e.printStackTrace()
+            return
         }
-
     }
+
+    private fun resolveSessionFile(path: String) =
+        if (isHost) {
+            workspaceFileSystem.getRelativeFile(path)
+        } else {
+            // Guest files live in the custom OCT VFS under oct://<sharedRoot>/...
+            (VirtualFileManager.getInstance().getFileSystem("oct") as OCTSessionFileSystem)
+                .findFileByPath(path)
+                ?: VirtualFileManager.getInstance().findFileByUrl("oct://$path")
+        }
 
     fun followPeer(peerId: String) {
         editorManager.followPeer(peerId)
@@ -104,13 +119,9 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
     }
 
     fun editorOpened(documentPath: String, peerId: String) {
-        if(isHost) {
+        if (isHost) {
             editorManager.guestOpenedEditor(documentPath)
         }
-    }
-
-    override fun dispose() {
-
     }
 
     fun handleVirtualFilesystemChange(event: FileChangeEvent) {
@@ -126,6 +137,8 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
             ProjectView.getInstance(project).refresh()
         }
     }
+
+    override fun dispose() {}
 }
 
 

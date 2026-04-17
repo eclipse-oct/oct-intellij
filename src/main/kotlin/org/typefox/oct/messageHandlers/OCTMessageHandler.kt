@@ -5,9 +5,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.notification.Notifications
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.ProjectManager
-import com.intellij.patterns.PlatformPatterns.virtualFile
 import com.jetbrains.rd.util.printlnError
 import org.eclipse.lsp4j.jsonrpc.Endpoint
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
@@ -76,6 +74,11 @@ class OCTMessageHandler(serverUrl: String, onSessionCreated: EventEmitter<Collab
     @JsonNotification
     fun init(initData: InitData) {
         collaborationInstance?.initPeers(initData)
+        if(collaborationInstance == null) {
+            executeOnSetInstance.add {
+                collaborationInstance?.initPeers(initData)
+            }
+        }
     }
 
     @JsonNotification
@@ -118,14 +121,16 @@ class OCTMessageHandler(serverUrl: String, onSessionCreated: EventEmitter<Collab
 abstract class BaseMessageHandler(val serverUrl: String, onSessionCreated: EventEmitter<CollaborationInstance>): Endpoint {
 
     protected var collaborationInstance: CollaborationInstance? = null
+    protected var executeOnSetInstance: MutableList<() -> Unit> = mutableListOf()
 
     interface BaseRemoteInterface {}
 
     abstract val remoteInterface: Class<out BaseRemoteInterface>
 
     init {
-        onSessionCreated.onEvent {
-            this.collaborationInstance = it
+        onSessionCreated.onEvent { instance ->
+            this.collaborationInstance = instance
+            executeOnSetInstance.forEach { it() }
         }
     }
 

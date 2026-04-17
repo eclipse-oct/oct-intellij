@@ -20,6 +20,7 @@ import org.typefox.oct.messageHandlers.BaseMessageHandler
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import java.io.File
 import java.io.InputStream
+import java.io.PrintWriter
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -59,11 +60,6 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
             // start oct process
             currentProcess = ProcessBuilder()
                 .command(executablePath.toString(), "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}")
-//                .command(
-//                    "node", "--inspect=23698",
-//                    "C:\\Typefox\\Open_Source\\open-collaboration-tools\\packages\\open-collaboration-service-process\\lib\\bundle.cjs",
-//                    "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}"
-//                )
                 .start()
             currentProcess?.onExit()?.thenRun {
                 println(
@@ -85,7 +81,7 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
                         gson.registerTypeAdapter(it, BinaryDataAdapter(it))
                     }
                 }
-                //.traceMessages(PrintWriter(System.out))
+                .traceMessages(PrintWriter(System.out))
                 .create()
 
             this.jsonRpc?.startListening()

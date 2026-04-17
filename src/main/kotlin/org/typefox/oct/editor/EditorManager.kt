@@ -1,15 +1,16 @@
 package org.typefox.oct.editor
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
+import com.intellij.openapi.editor.markup.CustomHighlighterRenderer
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
@@ -17,28 +18,27 @@ import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.TextEditor
-import com.intellij.openapi.project.BaseProjectDirectories.Companion.getBaseDirectories
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.JBColor
 import org.typefox.oct.ClientTextSelection
-import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.OCTSessionService
+import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.TextDocumentInsert
 import java.awt.Color
+import java.awt.Graphics
 import java.io.FileNotFoundException
-import javax.swing.SwingUtilities
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
 
-
-class EditorManager(private val octService: OCTMessageHandler.OCTService, val project: Project, private val isHost: Boolean) :
+class EditorManager(
+    private val octService: OCTMessageHandler.OCTService,
+    val project: Project,
+    private val sessionFileResolver: (String) -> VirtualFile?
+) :
     EditorFactoryListener {
     private val editors: MutableMap<String, Editor> = mutableMapOf()
-    private val cursorDisposables: MutableMap<String, Array<Inlay<CursorRenderer>>> = mutableMapOf()
+    private val cursorDecorations: MutableMap<String, Array<PeerCursorDecoration>> = mutableMapOf()
     private val documentListeners: MutableMap<String, EditorDocumentListener> = mutableMapOf()
 
     var followingPeerId: String? = null
@@ -65,6 +65,7 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
 
     override fun editorReleased(event: EditorFactoryEvent) {
         val path = octPathFromEditor(event.editor)
+        clearPeerDecorations(path, event.editor)
         editors.remove(path)
         event.editor.document.removeDocumentListener(documentListeners.remove(path)!!)
     }
@@ -87,17 +88,12 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
 
     fun updateTextSelection(path: String, selections: Array<ClientTextSelection>) {
         val editor = editors[path]
-        val session = service<OCTSessionService>().currentCollaborationInstances[project]
 
         for (selection in selections) {
             if (selection.peer == followingPeerId) {
                 invokeLater {
                     val editorManager = FileEditorManager.getInstance(this.project)
-                    val file = if (session?.isHost == true) {
-                        session.workspaceFileSystem.getRelativeFile(path)
-                    } else {
-                        VirtualFileManager.getInstance().findFileByUrl("oct://$path")
-                    }
+                    val file = sessionFileResolver(path)
                     if(file == null) {
                         return@invokeLater
                     }
@@ -111,8 +107,8 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
 
         if(editor != null) {
             ApplicationManager.getApplication().invokeAndWait {
-                cursorDisposables[path]?.forEach { Disposer.dispose(it) }
-                cursorDisposables[path] = Array(selections.size) { idx ->
+                clearPeerDecorations(path, editor)
+                cursorDecorations[path] = Array(selections.size) { idx ->
                     val selection = selections[idx]
                     createPeerCursor(selection, editor)
                 }
@@ -120,35 +116,53 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
         }
     }
 
-    private fun createPeerCursor(selection: ClientTextSelection, editor: Editor): Inlay<CursorRenderer> {
+    private fun createPeerCursor(selection: ClientTextSelection, editor: Editor): PeerCursorDecoration {
         val color = service<OCTSessionService>().currentCollaborationInstances[editor.project]!!
             .peerColors.getColor(selection.peer)
+        val textLength = editor.document.textLength
+        val start = selection.start.coerceIn(0, textLength)
+        val end = (selection.end ?: selection.start).coerceIn(0, textLength)
+
+        val selectionStart = minOf(start, end)
+        val selectionEnd = maxOf(start, end)
+
         var textHighlighter: RangeHighlighter? = null
-        val start = selection.start
-        val end = selection.end ?: selection.start
-        if (start != end) {
+        if (selectionStart != selectionEnd) {
             val highlightColor = Color(color.red, color.green, color.blue, 50)
             textHighlighter = editor.markupModel.addRangeHighlighter(
-                start,
-                end,+
+                selectionStart,
+                selectionEnd,
                 HighlighterLayer.CARET_ROW + 1,
                 TextAttributes(null, JBColor(highlightColor, highlightColor), null, null, 0),
                 HighlighterTargetArea.EXACT_RANGE
             )
         }
-        val cursor = editor.inlayModel.addInlineElement(start, CursorRenderer(color))!!
-        if(textHighlighter != null) {
-            Disposer.register(cursor) {
-                editor.markupModel.removeHighlighter(textHighlighter)
-            }
+
+        val cursorHighlighter = editor.markupModel.addRangeHighlighter(
+            start,
+            start,
+            HighlighterLayer.CARET_ROW + 2,
+            null,
+            HighlighterTargetArea.EXACT_RANGE
+        )
+        cursorHighlighter.customRenderer = PeerCaretHighlighterRenderer(color)
+
+        return PeerCursorDecoration(cursorHighlighter, textHighlighter)
+    }
+
+    private fun clearPeerDecorations(path: String, editor: Editor) {
+        cursorDecorations.remove(path)?.forEach { decoration ->
+            editor.markupModel.removeHighlighter(decoration.cursorHighlighter)
+            decoration.textHighlighter?.let(editor.markupModel::removeHighlighter)
         }
-        return cursor
     }
 
     fun updateDocument(path: String, updates: Array<TextDocumentInsert>) {
         val virtualFile = findFileByRelativePath(path)
-        val document = FileDocumentManager.getInstance().getDocument(findFileByRelativePath(path))
-            ?: throw IllegalStateException("Document for file $path not found")
+        val document = ReadAction.compute<com.intellij.openapi.editor.Document, Throwable> {
+            FileDocumentManager.getInstance().getDocument(virtualFile)
+                ?: throw IllegalStateException("Document for file $path not found")
+        }
 
         WriteCommandAction.runWriteCommandAction(
             project
@@ -191,12 +205,24 @@ class EditorManager(private val octService: OCTMessageHandler.OCTService, val pr
     }
 
     private fun findFileByRelativePath(path: String): VirtualFile {
-        val segments = path.split("/", "\\")
-            val baseDir = project.getBaseDirectories().find { dir -> segments[0] == dir.name  }
-            if (baseDir == null) {
-                throw FileNotFoundException("No shared folder found for file: $path")
-            }
-            val absolutePath = Path(baseDir.path).resolve(segments.drop(1).joinToString("/")).pathString
-            return LocalFileSystem.getInstance().findFileByPath(absolutePath) ?: throw FileNotFoundException("File not found: $path");
+        return sessionFileResolver(path) ?: throw FileNotFoundException("File not found: $path")
     }
 }
+
+private data class PeerCursorDecoration(
+    val cursorHighlighter: RangeHighlighter,
+    val textHighlighter: RangeHighlighter?
+)
+
+private class PeerCaretHighlighterRenderer(private val color: Color) : CustomHighlighterRenderer {
+    override fun paint(editor: Editor, highlighter: RangeHighlighter, g: Graphics) {
+        val offset = highlighter.startOffset.coerceIn(0, editor.document.textLength)
+        val point = editor.offsetToXY(offset)
+        val bottom = point.y + editor.lineHeight - 1
+
+        g.color = color
+        g.drawLine(point.x, point.y, point.x, bottom)
+        g.drawLine(point.x + 1, point.y, point.x + 1, bottom)
+    }
+}
+
