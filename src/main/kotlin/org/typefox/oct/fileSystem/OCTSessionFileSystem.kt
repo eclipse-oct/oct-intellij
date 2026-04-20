@@ -33,7 +33,7 @@ class OCTSessionFileSystem() : VirtualFileSystem() {
         }
         Disposer.register(collaborationInstance) {
             for (root in roots) {
-                roots.remove(root)
+                this.roots.remove(root)
             }
         }
     }

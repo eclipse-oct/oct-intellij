@@ -139,6 +139,7 @@ abstract class BaseMessageHandler(val serverUrl: String, onSessionCreated: Event
         onSessionCreated.onEvent { instance ->
             this.collaborationInstance = instance
             executeOnSetInstance.forEach { it() }
+            executeOnSetInstance.clear()
         }
     }
 

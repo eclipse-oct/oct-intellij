@@ -138,7 +138,9 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
         }
     }
 
-    override fun dispose() {}
+    override fun dispose() {
+        System.out.println("disposed")
+    }
 }
 
 
