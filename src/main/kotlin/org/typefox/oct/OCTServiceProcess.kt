@@ -110,7 +110,18 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
     }
 
     override fun dispose() {
-        currentProcess?.destroy()
+        try {
+            currentProcess?.destroy()
+            currentProcess?.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+
+        if (currentProcess?.isAlive == true) {
+            currentProcess?.destroyForcibly()
+        }
+
+        jsonRpc = null
     }
 
 }

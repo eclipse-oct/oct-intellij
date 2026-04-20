@@ -1,5 +1,6 @@
 package org.typefox.oct
 
+import com.intellij.ide.RecentProjectsManager
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.notification.Notifications
@@ -8,10 +9,8 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectCloseListener
 import com.intellij.openapi.project.ProjectManager
-import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.impl.status.widget.StatusBarWidgetsManager
-import com.intellij.ui.AnimatedIcon
 import org.typefox.oct.actions.CopyRoomTokenAction
 import org.typefox.oct.actions.CopyRoomUrlAction
 import org.typefox.oct.messageHandlers.BaseMessageHandler
@@ -19,17 +18,14 @@ import org.typefox.oct.messageHandlers.FileSystemMessageHandler
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.sessionView.OCTSessionStatusBarWidgetFactory
 import org.typefox.oct.settings.OCTSettings
-import org.typefox.oct.util.Disposable
 import org.typefox.oct.util.EventEmitter
 import java.io.File
-import javax.swing.*
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.pathString
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.application.ApplicationManager
-import io.grpc.netty.shaded.io.netty.util.concurrent.Future
-import org.eclipse.sisu.Nullable
+import com.intellij.util.io.systemIndependentPath
 import java.util.concurrent.CompletableFuture
 
 val messageHandlers: Array<Class<out BaseMessageHandler>> = arrayOf(
@@ -102,6 +98,7 @@ class OCTSessionService() {
                     if (newProject != null) {
                         currentProcesses[newProject] = currentProcess
                         sessionCreated(sessionData, serverUrl, newProject, false)
+                        RecentProjectsManager.getInstance().removePath(projectDir.systemIndependentPath)
                     } else {
                         createErrorNotification(Throwable(), "Could not create project for session")
                     }
@@ -110,7 +107,15 @@ class OCTSessionService() {
     }
 
     fun closeCurrentSession(project: Project) {
-        currentProcesses[project]?.getOctService<OCTMessageHandler.OCTService>()?.closeSession()?.get()
+        try {
+            // Close the session with a timeout to prevent indefinite blocking
+            currentProcesses[project]?.getOctService<OCTMessageHandler.OCTService>()
+                ?.closeSession()?.get(5, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            // Log the error but continue with cleanup
+            println("Error closing session: ${e.message}")
+        }
+
         currentProcesses[project]?.let {
             Disposer.dispose(it)
         }

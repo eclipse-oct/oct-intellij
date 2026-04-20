@@ -1,11 +1,14 @@
 package org.typefox.oct.messageHandlers
 
+import com.intellij.ide.actions.CloseProjectAction
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.notification.Notifications
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.ProjectManager
 import com.jetbrains.rd.util.printlnError
 import org.eclipse.lsp4j.jsonrpc.Endpoint
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification
@@ -111,7 +114,12 @@ class OCTMessageHandler(serverUrl: String, onSessionCreated: EventEmitter<Collab
         ApplicationManager.getApplication().invokeLater {
             if(collaborationInstance?.isHost != true) {
                 collaborationInstance?.project?.let {
-                    ProjectManager.getInstance().closeAndDispose(it)
+                    if(it.isOpen) {
+                        ActionManager.getInstance().getAction("CloseProject")?.actionPerformed(
+                            AnActionEvent.createFromDataContext("", null,
+                        SimpleDataContext.getProjectContext(it))
+                        )
+                    }
                 }
             }
         }
