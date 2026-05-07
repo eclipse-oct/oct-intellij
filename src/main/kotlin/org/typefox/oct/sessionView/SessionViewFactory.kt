@@ -1,5 +1,6 @@
 package org.typefox.oct.sessionView
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.ActionToolbar
@@ -12,8 +13,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBList
-import com.intellij.util.EventDispatcher
 import org.typefox.oct.*
 import org.typefox.oct.actions.ToggleFollowAction
 import java.awt.BorderLayout
@@ -35,6 +34,12 @@ class SessionViewFactory : ToolWindowFactory {
 
         sessionService.onSessionCreated.onEvent {
             if(it.project == project) {
+                setViewForProject(panel, project, sessionService)
+            }
+        }
+
+        sessionService.onSessionClosed.onEvent {
+            if(it === project) {
                 setViewForProject(panel, project, sessionService)
             }
         }
@@ -92,21 +97,42 @@ class SessionView(private val project: Project): JPanel() {
 
     private fun renderPeerList() {
         val session = service<OCTSessionService>().currentCollaborationInstances[project]!!
+        val identity = session.identity
 
-        val peers = if(session.host != null)
-            arrayOf(session.host!!, *session.guests.toTypedArray())
-        else
-            session.guests.toTypedArray()
+        // Rebuild the list on each update to avoid stacking duplicate UI rows.
+        removeAll()
 
-        add(JPanel().apply {
-            layout = GridLayout(peers.size, 2)
-            peers.forEachIndexed() { index, peer ->
-                add(JLabel(if (index == 0) "${peer.name} (Host)" else peer.name).apply {
+        val ownName = identity?.name ?: "Unknown user"
+        val ownSuffix = if (session.isHost) "you • host" else "you"
+        val ownPeerId = identity?.id
+
+        val rows = mutableListOf<JPanel>()
+
+        // Current user is always shown first with a generic user icon.
+        rows += JPanel(BorderLayout()).apply {
+            add(JLabel(mutedSuffixText(ownName, ownSuffix)).apply {
+                icon = AllIcons.General.User
+                verticalAlignment = JLabel.CENTER
+                iconTextGap = 8
+            }, BorderLayout.WEST)
+            add(Box.createHorizontalGlue(), BorderLayout.CENTER)
+        }
+
+        val remoteHost = session.host?.takeIf { it.id != ownPeerId }
+        val remoteGuests = session.guests
+            .asSequence()
+            .filter { it.id != ownPeerId }
+            .filter { guest -> remoteHost?.id != guest.id }
+            .toList()
+
+        fun createRemoteRow(peer: Peer, suffix: String?): JPanel {
+            return JPanel(GridLayout(1, 2)).apply {
+                val labelText = if (suffix != null) mutedSuffixText(peer.name, suffix) else peer.name
+                add(JLabel(labelText).apply {
                     icon = PeerColorIcon(session.peerColors.getColor(peer.id))
                     verticalAlignment = JLabel.CENTER
                     iconTextGap = 8
                 })
-                add(Box.createHorizontalGlue())
                 val action = ToggleFollowAction(peer.id, project)
                 add(JPanel().apply {
                     add(
@@ -115,12 +141,25 @@ class SessionView(private val project: Project): JPanel() {
                             action.templatePresentation.clone(),
                             ActionPlaces.UNKNOWN,
                             ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE
-                        ).apply {
-                            isEnabled = true
-                        })
+                        ).apply { isEnabled = true })
                 })
             }
+        }
+
+        remoteHost?.let { rows += createRemoteRow(it, "host") }
+        remoteGuests.forEach { guest -> rows += createRemoteRow(guest, null) }
+
+        add(JPanel().apply {
+            layout = GridLayout(rows.size, 1)
+            rows.forEach { row -> add(row) }
         }, BorderLayout.PAGE_START)
+
+        revalidate()
+        repaint()
+    }
+
+    private fun mutedSuffixText(name: String, suffix: String): String {
+        return "<html>$name <span style='color:gray'>($suffix)</span></html>"
     }
 }
 

@@ -34,6 +34,8 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
     val guests: ArrayList<Peer> = ArrayList()
     var host: Peer? = null
 
+    var identity: Peer? = null
+
     val peerColors = PeerColors()
 
     val onPeersChanged = EventEmitter<Unit?>()

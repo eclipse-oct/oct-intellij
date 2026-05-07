@@ -43,6 +43,7 @@ class OCTSessionService() {
     var currentCollaborationInstances: MutableMap<Project, CollaborationInstance> = mutableMapOf()
 
     var onSessionCreated: EventEmitter<CollaborationInstance> = EventEmitter()
+    var onSessionClosed: EventEmitter<Project> = EventEmitter()
 
     fun hasOpenSession(project: Project): Boolean {
         return currentCollaborationInstances.containsKey(project)
@@ -128,9 +129,10 @@ class OCTSessionService() {
         }
         currentCollaborationInstances.remove(project)
 
+        onSessionClosed.fire(project)
+
         // update status bar
         project.service<StatusBarWidgetsManager>().updateWidget(OCTSessionStatusBarWidgetFactory::class.java)
-
     }
 
     fun projectClosed(project: Project) {

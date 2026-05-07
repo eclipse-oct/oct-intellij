@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
@@ -199,7 +200,9 @@ class EditorManager(
     }
 
     fun guestOpenedEditor(path: String) {
-        val document = FileDocumentManager.getInstance().getDocument(findFileByRelativePath(path))
+        val document = ReadAction.compute<Document?, Throwable>() {
+            FileDocumentManager.getInstance().getDocument(findFileByRelativePath(path))
+        }
 
         octService.openDocument("text", path, document!!.text)
     }

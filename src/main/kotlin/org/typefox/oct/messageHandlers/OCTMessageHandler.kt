@@ -85,6 +85,17 @@ class OCTMessageHandler(serverUrl: String, onSessionCreated: EventEmitter<Collab
     }
 
     @JsonNotification
+    fun peerInfo(peer: Peer) {
+        if(collaborationInstance == null) {
+            executeOnSetInstance.add {
+                collaborationInstance!!.identity = peer
+            }
+        } else {
+            collaborationInstance!!.identity = peer
+        }
+    }
+
+    @JsonNotification
     fun peerJoined(peer: Peer) {
         collaborationInstance?.peerJoined(peer)
     }
