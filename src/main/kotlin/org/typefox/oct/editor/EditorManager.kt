@@ -94,10 +94,7 @@ class EditorManager(
             if (selection.peer == followingPeerId) {
                 invokeLater {
                     val editorManager = FileEditorManager.getInstance(this.project)
-                    val file = sessionFileResolver(path)
-                    if(file == null) {
-                        return@invokeLater
-                    }
+                    val file = sessionFileResolver(path) ?: return@invokeLater
                     editorManager.openFile(file, true)
                     editors[path]?.scrollingModel?.scrollTo(
                         LogicalPosition(selection.start, selection.end ?: selection.start), ScrollType.CENTER)
@@ -160,7 +157,7 @@ class EditorManager(
 
     fun updateDocument(path: String, updates: Array<TextDocumentInsert>) {
         val virtualFile = findFileByRelativePath(path)
-        val document = ReadAction.compute<com.intellij.openapi.editor.Document, Throwable> {
+        val document = ReadAction.compute<Document, Throwable> {
             FileDocumentManager.getInstance().getDocument(virtualFile)
                 ?: throw IllegalStateException("Document for file $path not found")
         }
