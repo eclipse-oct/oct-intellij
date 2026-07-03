@@ -1,0 +1,54 @@
+name: Automatically Package and Sign Plugin
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers when you push a version tag like v1.0.0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Checkout open-collaboration-tools
+        uses: actions/checkout@v4
+        with:
+          repository: eclipse-oct/open-collaboration-tools
+          path: open-collaboration-tools
+
+      - name: Build open-collaboration-tools
+        working-directory: open-collaboration-tools
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set OCT project path in gradle.properties
+        run: |
+          sed -i "s|org.typefox.oct-project-path=.*|org.typefox.oct-project-path=${{ github.workspace }}/open-collaboration-tools|" gradle.properties
+
+      # Run the build. Gradle will pick up the files we just decoded.
+      - name: Build and Sign Plugin
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.JB_CERT_CHAIN_BASE64 }}
+          PRIVATE_KEY: ${{ secrets.JB_PRIVATE_KEY_BASE64 }}
+        run: ./gradlew :buildPlugin :signPlugin
+
+      # The signed ZIP file can now be uploaded to GitHub Releases or JetBrains Marketplace
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-plugin
+          path: build/distributions/*.zip

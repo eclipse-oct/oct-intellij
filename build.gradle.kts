@@ -1,4 +1,5 @@
 import org.apache.tools.ant.taskdefs.condition.Os
+import java.util.Base64
 
 plugins {
     id("java")
@@ -45,9 +46,12 @@ tasks {
     }
 
     signPlugin {
-        certificateChain.set(System.getenv("CERTIFICATE_CHAIN"))
-        privateKey.set(System.getenv("PRIVATE_KEY"))
-        password.set(System.getenv("PRIVATE_KEY_PASSWORD"))
+        certificateChain.set(System.getenv("CERTIFICATE_CHAIN")?.let {
+            String(Base64.getDecoder().decode(it))
+        })
+        privateKey.set(System.getenv("PRIVATE_KEY")?.let {
+            String(Base64.getDecoder().decode(it))
+        })
     }
 
     publishPlugin {
@@ -78,10 +82,10 @@ tasks.register<Copy>("copyExecutableToResources") {
 
 tasks.register<Exec>("createServiceProcessExecutable") {
     workingDir = file( "${octProjectPath}/packages/open-collaboration-service-process")
-    var npmCommand = "npm"
     if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-        npmCommand = "npm.cmd"
+        commandLine("npm", "run", "create:executable")
+    } else {
+        commandLine("bash", "-il", "-c", "npm run create:executable")
     }
-    commandLine(npmCommand, "run", "create:executable")
 }
 
