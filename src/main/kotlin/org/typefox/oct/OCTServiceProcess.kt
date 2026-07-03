@@ -10,7 +10,7 @@ import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.extensions.PluginId
-import org.apache.tools.ant.taskdefs.condition.Os
+import com.intellij.openapi.util.SystemInfo
 import org.eclipse.lsp4j.jsonrpc.Launcher
 import org.eclipse.lsp4j.jsonrpc.messages.Message
 import org.eclipse.lsp4j.jsonrpc.messages.NotificationMessage
@@ -20,7 +20,6 @@ import org.typefox.oct.messageHandlers.BaseMessageHandler
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import java.io.File
 import java.io.InputStream
-import java.io.PrintWriter
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -90,7 +89,7 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
 
     private fun extractExecutable() {
         var fileEnding = ""
-        if(Os.isFamily(Os.FAMILY_WINDOWS)) {
+        if(SystemInfo.isWindows) {
             fileEnding += ".exe"
         }
 

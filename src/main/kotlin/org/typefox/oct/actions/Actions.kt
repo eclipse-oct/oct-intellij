@@ -1,7 +1,6 @@
 package org.typefox.oct.actions
 
 import com.intellij.icons.AllIcons
-import com.intellij.icons.ExpUiIcons
 import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -115,7 +114,7 @@ class ToggleFollowAction(val peerId: String, val project: Project) : AnAction(Al
 
     override fun update(e: AnActionEvent) {
         val isFollowing = service<OCTSessionService>().currentCollaborationInstances[e.project]?.isFollowingPeer(peerId) ?: false
-        e.presentation.icon = if(isFollowing) ExpUiIcons.General.Close else AllIcons.General.InspectionsEye
+        e.presentation.icon = if(isFollowing) AllIcons.Actions.Close else AllIcons.General.InspectionsEye
         e.presentation.text = if (isFollowing) "Stop Following" else "Follow"
     }
 

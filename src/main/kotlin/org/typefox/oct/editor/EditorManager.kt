@@ -182,7 +182,7 @@ class EditorManager(
     }
 
     private fun octPathFromEditor(editor: Editor): String {
-        return editor.virtualFile.path.replace(
+        return (editor.virtualFile?.path ?: "").replace(
             Path(editor.project!!.basePath!!).parent.pathString.replace("\\", "/") + "/",
             ""
         )

@@ -1,7 +1,5 @@
 package org.typefox.oct
 
-import com.google.api.Endpoint
-
 data class OCPMessage(
     val method: String,
     val params: Array<Any>,

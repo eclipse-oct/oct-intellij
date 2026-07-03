@@ -9,10 +9,6 @@ import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.*
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.*
-import com.intellij.testFramework.utils.vfs.createDirectory
-import com.intellij.testFramework.utils.vfs.createFile
-import com.intellij.testFramework.utils.vfs.deleteRecursively
-import com.intellij.util.io.size
 import org.typefox.oct.*
 import org.typefox.oct.messageHandlers.FileSystemMessageHandler
 import java.io.FileNotFoundException
