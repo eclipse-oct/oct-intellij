@@ -21,6 +21,7 @@ import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Graphics
 import java.awt.GridLayout
+import java.awt.RenderingHints
 import java.awt.geom.Ellipse2D
 import javax.swing.*
 
@@ -70,16 +71,17 @@ class SessionView(private val project: Project): JPanel() {
         override fun paintIcon(c: Component?, g: Graphics?, x: Int, y: Int) {
             val g2d = g!!.create() as java.awt.Graphics2D
             g2d.color = color
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             g2d.fill(Ellipse2D.Double(x.toDouble(), y.toDouble(), iconWidth.toDouble(), iconHeight.toDouble()))
             g2d.dispose()
         }
 
         override fun getIconWidth(): Int {
-            return 12
+            return 16
         }
 
         override fun getIconHeight(): Int {
-            return 12
+            return 16
         }
     }
 
