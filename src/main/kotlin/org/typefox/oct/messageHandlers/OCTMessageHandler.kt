@@ -5,7 +5,10 @@ import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.notification.Notifications
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.ActionUiKind
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
@@ -126,10 +129,15 @@ class OCTMessageHandler(serverUrl: String, onSessionCreated: EventEmitter<Collab
             if(collaborationInstance?.isHost != true) {
                 collaborationInstance?.project?.let {
                     if(it.isOpen) {
-                        ActionManager.getInstance().getAction("CloseProject")?.actionPerformed(
-                            AnActionEvent.createFromDataContext("", null,
-                        SimpleDataContext.getProjectContext(it))
-                        )
+                        ActionManager.getInstance().getAction("CloseProject")?.let { action ->
+                            val event = AnActionEvent.createEvent(action,
+                                SimpleDataContext.getProjectContext(it),
+                                null,
+                                ActionPlaces.UNKNOWN,
+                                ActionUiKind.NONE,
+                                null)
+                            ActionUtil.performAction(action, event)
+                        }
                     }
                 }
             }

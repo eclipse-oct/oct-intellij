@@ -6,10 +6,8 @@ import com.google.gson.Gson
 import com.google.gson.TypeAdapter
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
-import com.intellij.ide.plugins.PluginManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.util.SystemInfo
 import org.eclipse.lsp4j.jsonrpc.Launcher
 import org.eclipse.lsp4j.jsonrpc.messages.Message
@@ -50,41 +48,37 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
             extractExecutable()
         }
 
-        val pluginId = PluginId.getId("org.typefox.open-collaboration-intelliJ")
-        val plugin = PluginManager.getInstance().findEnabledPlugin(pluginId)
-        if (plugin != null) {
-            val savedAuthToken = ApplicationManager.getApplication().getService(AuthenticationService::class.java)
-                .getAuthToken(serverUrl)
+        val savedAuthToken = ApplicationManager.getApplication().getService(AuthenticationService::class.java)
+            .getAuthToken(serverUrl)
 
-            // start oct process
-            currentProcess = ProcessBuilder()
-                .command(executablePath.toString(), "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}")
-                .start()
-            currentProcess?.onExit()?.thenRun {
-                println(
-                    "current process exited with \n" + currentProcess?.errorStream?.readAllBytes()
-                        ?.toString(Charsets.UTF_8)
-                )
-                currentProcess = null
-                Files.delete(executablePath?.parent)
-                executablePath = null
-            }
-            this.jsonRpc = Launcher.Builder<BaseMessageHandler.BaseRemoteInterface>()
-                .setLocalServices(messageHandlers)
-                .setClassLoader(OCTMessageHandler.OCTService::class.java.classLoader)
-                .setRemoteInterfaces(messageHandlers.map { it.remoteInterface })
-                .setInput(currentProcess?.inputStream)
-                .setOutput(currentProcess?.outputStream)
-                .configureGson { gson ->
-                    binaryDataTypes.forEach {
-                        gson.registerTypeAdapter(it, BinaryDataAdapter(it))
-                    }
-                }
-//                .traceMessages(PrintWriter(System.out))
-                .create()
-
-            this.jsonRpc?.startListening()
+        // start oct process
+        currentProcess = ProcessBuilder()
+            .command(executablePath.toString(), "--server-address=${this.serverUrl}", "--auth-token=${savedAuthToken}")
+            .start()
+        currentProcess?.onExit()?.thenRun {
+            println(
+                "current process exited with \n" + currentProcess?.errorStream?.readAllBytes()
+                    ?.toString(Charsets.UTF_8)
+            )
+            currentProcess = null
+            Files.delete(executablePath!!.parent)
+            executablePath = null
         }
+        this.jsonRpc = Launcher.Builder<BaseMessageHandler.BaseRemoteInterface>()
+            .setLocalServices(messageHandlers)
+            .setClassLoader(OCTMessageHandler.OCTService::class.java.classLoader)
+            .setRemoteInterfaces(messageHandlers.map { it.remoteInterface })
+            .setInput(currentProcess?.inputStream)
+            .setOutput(currentProcess?.outputStream)
+            .configureGson { gson ->
+                binaryDataTypes.forEach {
+                    gson.registerTypeAdapter(it, BinaryDataAdapter(it))
+                }
+            }
+//                .traceMessages(PrintWriter(System.out))
+            .create()
+
+        this.jsonRpc?.startListening()
     }
 
     private fun extractExecutable() {
@@ -93,7 +87,7 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
             fileEnding += ".exe"
         }
 
-        val binaryStream: InputStream = OCTServiceProcess::class.java.classLoader.getResourceAsStream(
+        val binaryStream: InputStream? = OCTServiceProcess::class.java.classLoader.getResourceAsStream(
             "$EXECUTABLE_LOCATION$fileEnding")
 
         val tempDir: Path = Files.createTempDirectory("oct-service-process-bin")

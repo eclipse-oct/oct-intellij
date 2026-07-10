@@ -4,7 +4,9 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.ActionToolbar
+import com.intellij.openapi.actionSystem.ActionUiKind
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.actionSystem.impl.ActionButton
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.invokeLater
@@ -185,9 +187,8 @@ class NoSessionView(val project: Project): JPanel() {
     private fun executeAction(actionId: String) {
         val action = ActionManager.getInstance().getAction(actionId)
         if (action != null) {
-            val event = AnActionEvent.createFromDataContext("", null,
-                SimpleDataContext.getProjectContext(project))
-            action.actionPerformed(event)
+            val event = AnActionEvent.createEvent(action, SimpleDataContext.getProjectContext(project), null, ActionPlaces.UNKNOWN, ActionUiKind.NONE, null)
+            ActionUtil.performAction(action, event)
         } else {
             println("Aktion mit ID $actionId nicht gefunden.")
         }

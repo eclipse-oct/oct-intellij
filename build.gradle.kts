@@ -34,7 +34,7 @@ dependencies {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "232"
+            sinceBuild = "252.28539.54"
         }
     }
 }

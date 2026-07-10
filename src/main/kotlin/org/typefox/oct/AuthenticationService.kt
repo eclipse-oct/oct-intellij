@@ -12,31 +12,21 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.DialogBuilder
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.popup.JBPopupFactory
-import com.intellij.remoteDev.util.addPathSuffix
 import com.intellij.remoteServer.util.CloudConfigurationUtil.createCredentialAttributes
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.util.Urls
-import com.intellij.util.withQuery
 import org.typefox.oct.settings.OCTSettings
-import org.typefox.oct.util.EventEmitter
-import java.awt.Desktop
-import java.net.URI
+import com.intellij.ide.BrowserUtil
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTextField
-import javax.swing.SwingUtilities
 import com.intellij.util.io.HttpRequests
-import com.intellij.util.withPath
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 import javax.swing.Box
 import javax.swing.JLabel
-import kotlin.io.path.Path
 
 const val OCT_TOKEN_SERVICE_KEY = "OCT-Auth-Token"
 
@@ -68,7 +58,7 @@ class AuthenticationService(private val scope: CoroutineScope) {
                                 this.currentAuthPopup?.show()
                             }
                         } else if (!JBCefApp.isSupported()) {
-                            Desktop.getDesktop().browse(URI(metadata.loginPageUrl!!))
+                            BrowserUtil.browse(metadata.loginPageUrl!!)
                         }
                     }
                 }
@@ -125,10 +115,10 @@ class AuthenticationService(private val scope: CoroutineScope) {
     }
 
     private fun handleWebAuth(serverUrl: String, provider: AuthProvider, token: String) {
-        Desktop.getDesktop().browse(URI(Urls.newFromEncoded(serverUrl)
+        BrowserUtil.browse(Urls.newFromEncoded(serverUrl)
             .resolve(provider.endpoint)
             .addParameters(mutableMapOf(Pair("token", token)))
-            .toExternalForm()))
+            .toExternalForm())
     }
 
     fun onAuthenticated(authToken: String, serverUrl: String) {
@@ -140,8 +130,10 @@ class AuthenticationService(private val scope: CoroutineScope) {
         }
         val attributes = createCredentialAttributes(OCT_TOKEN_SERVICE_KEY, serverUrl)!!
         val credentials = Credentials(serverUrl, authToken)
-        PasswordSafe.instance.set(attributes, credentials)
-        service<OCTSettings>().didStoreUserToken(serverUrl)
+        ApplicationManager.getApplication().executeOnPooledThread {
+            PasswordSafe.instance.set(attributes, credentials)
+            service<OCTSettings>().didStoreUserToken(serverUrl)
+        }
     }
 
     fun getAuthToken(serverUrl: String): OneTimeString? {

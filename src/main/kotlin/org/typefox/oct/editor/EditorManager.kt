@@ -1,8 +1,8 @@
 package org.typefox.oct.editor
 
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.util.Computable
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
@@ -82,7 +82,7 @@ class EditorManager(
         octService.openDocument("text", path, editor.document.text)
 
         documentListeners[path] = EditorDocumentListener(octService, path, editor.project!!)
-        editor.document.addDocumentListener(documentListeners[path]!!)
+        editor.document.addDocumentListener(documentListeners[path]!!, project)
         editor.caretModel.addCaretListener(EditorCaretListener(octService, path))
         editor.selectionModel.addSelectionListener(EditorSelectionListener(octService, path))
     }
@@ -157,10 +157,10 @@ class EditorManager(
 
     fun updateDocument(path: String, updates: Array<TextDocumentInsert>) {
         val virtualFile = findFileByRelativePath(path)
-        val document = ReadAction.compute<Document, Throwable> {
+        val document = ApplicationManager.getApplication().runReadAction(Computable {
             FileDocumentManager.getInstance().getDocument(virtualFile)
                 ?: throw IllegalStateException("Document for file $path not found")
-        }
+        })
 
         WriteCommandAction.runWriteCommandAction(
             project
@@ -197,9 +197,9 @@ class EditorManager(
     }
 
     fun guestOpenedEditor(path: String) {
-        val document = ReadAction.compute<Document?, Throwable>() {
+        val document = ApplicationManager.getApplication().runReadAction(Computable {
             FileDocumentManager.getInstance().getDocument(findFileByRelativePath(path))
-        }
+        })
 
         octService.openDocument("text", path, document!!.text)
     }

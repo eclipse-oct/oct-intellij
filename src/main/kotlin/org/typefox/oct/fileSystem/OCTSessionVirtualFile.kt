@@ -4,11 +4,13 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.VirtualFileSystem
+import com.intellij.openapi.vfs.newvfs.CacheAvoidingVirtualFile
+import com.intellij.openapi.vfs.newvfs.CacheAvoidingVirtualFileWrapper
+import com.intellij.openapi.vfs.newvfs.NewVirtualFile
 import org.typefox.oct.*
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.Path
-import java.util.concurrent.CompletableFuture
 import kotlin.io.path.name
 import kotlin.io.path.Path
 
@@ -60,14 +62,12 @@ open class OCTSessionVirtualFile(
         return parent
     }
 
-    override fun getChildren(): Array<VirtualFile>? {
+    override fun getChildren(): Array<VirtualFile> {
         if (type != FileType.Directory) {
-            return null
+            return emptyArray()
         }
 
-        if(cachedChildren != null) {
-            return cachedChildren
-        }
+        cachedChildren?.let { return it }
 
         val content = fileSystem.readDir(path)?.get() ?: return emptyArray()
 
@@ -78,7 +78,7 @@ open class OCTSessionVirtualFile(
                 this,
                 fileSystem)
         }.toTypedArray()
-        return cachedChildren
+        return cachedChildren ?: emptyArray()
     }
 
     override fun getOutputStream(requestor: Any?, newModificationStamp: Long, newTimeStamp: Long): OutputStream {
