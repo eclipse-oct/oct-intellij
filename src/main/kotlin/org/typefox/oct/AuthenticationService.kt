@@ -102,7 +102,9 @@ class AuthenticationService(private val scope: CoroutineScope) {
             dialog.dialogWrapper.close(0)
             scope.launch {
                 HttpRequests.post(
-                    Urls.newFromEncoded(serverUrl).resolve(provider.endpoint).toExternalForm(),
+                    Urls.newFromEncoded(serverUrl)
+                        .resolve(provider.endpoint.replace(Regex("^/"), ""))
+                        .toExternalForm(),
                     "application/json"
                 ).connect { request ->
                     val jsonBody = Gson().toJson(data)
