@@ -24,7 +24,7 @@ import java.nio.file.StandardCopyOption
 import java.util.*
 
 
-const val EXECUTABLE_LOCATION = "bin/oct-service-process"
+const val EXECUTABLE_LOCATION = "bin"
 
 class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List<BaseMessageHandler>) : Disposable {
     private var currentProcess: Process? = null
@@ -82,13 +82,15 @@ class OCTServiceProcess(private val serverUrl: String, val messageHandlers: List
     }
 
     private fun extractExecutable() {
-        var fileEnding = ""
-        if(SystemInfo.isWindows) {
-            fileEnding += ".exe"
+        val osDir = when {
+            SystemInfo.isWindows -> "win"
+            SystemInfo.isMac -> "mac"
+            else -> "linux"
         }
+        val fileEnding = if (SystemInfo.isWindows) ".exe" else ""
 
         val binaryStream: InputStream? = OCTServiceProcess::class.java.classLoader.getResourceAsStream(
-            "$EXECUTABLE_LOCATION$fileEnding")
+            "$EXECUTABLE_LOCATION/$osDir/oct-service-process$fileEnding")
 
         val tempDir: Path = Files.createTempDirectory("oct-service-process-bin")
         val tempBinaryPath = tempDir.resolve("oct-service-process$fileEnding")

@@ -1,5 +1,6 @@
 import org.apache.tools.ant.taskdefs.condition.Os
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.net.URI
 import java.util.Base64
 
 plugins {
@@ -71,16 +72,63 @@ tasks {
     }
 }
 
-val octProjectPath = project.property("org.typefox.oct-project-path")
+val octProjectPath = (project.findProperty("org.typefox.oct-project-path") as String?)?.takeIf { it.isNotBlank() }
 
-tasks.register<Copy>("copyExecutableToResources") {
+// oct-service-process can't be built per-OS by a JetBrains plugin release, so when no local
+// open-collaboration-tools checkout is configured, download the prebuilt executable for every
+// supported OS from the open-collaboration-tools GitHub release instead.
+val octServiceProcessVersion = "0.3.0"
+val octServiceProcessReleaseUrl =
+    "https://github.com/eclipse-oct/open-collaboration-tools/releases/download/service-process-v$octServiceProcessVersion"
+
+data class ServiceProcessTarget(val os: String, val assetSuffix: String, val executableSuffix: String)
+
+val serviceProcessTargets = listOf(
+    ServiceProcessTarget("win", "windows-x64.exe", ".exe"),
+    ServiceProcessTarget("linux", "linux-x64", ""),
+    ServiceProcessTarget("mac", "macos-x64", ""),
+)
+
+tasks.register("downloadServiceProcessExecutables") {
+    val outputDir = file("$projectDir/src/main/resources/bin")
+    val downloads = serviceProcessTargets.map { target ->
+        val assetName = "oct-service-process-$octServiceProcessVersion-${target.assetSuffix}"
+        val url = "$octServiceProcessReleaseUrl/$assetName"
+        val destFile = File(outputDir, "${target.os}/oct-service-process${target.executableSuffix}")
+        url to destFile
+    }
+    doLast {
+        downloads.forEach { (url, destFile) ->
+            destFile.parentFile.mkdirs()
+            URI(url).toURL().openStream().use { input ->
+                destFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            destFile.setExecutable(true)
+        }
+    }
+}
+
+tasks.register<Copy>("copyLocalExecutableToResources") {
     dependsOn("createServiceProcessExecutable")
     var executableName = "oct-service-process"
-    if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+    val currentOs = when {
+        Os.isFamily(Os.FAMILY_WINDOWS) -> "win"
+        Os.isFamily(Os.FAMILY_MAC) -> "mac"
+        else -> "linux"
+    }
+    if (currentOs == "win") {
         executableName = "$executableName.exe"
     }
     from("${octProjectPath}/packages/open-collaboration-service-process/bin/$executableName")
-    into("$projectDir/src/main/resources/bin")
+    into("$projectDir/src/main/resources/bin/$currentOs")
+}
+
+tasks.register("copyExecutableToResources") {
+    if (octProjectPath == null) {
+        dependsOn("downloadServiceProcessExecutables")
+    } else {
+        dependsOn("copyLocalExecutableToResources")
+    }
 }
 
 tasks.register<Exec>("createServiceProcessExecutable") {

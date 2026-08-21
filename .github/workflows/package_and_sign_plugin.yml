@@ -18,28 +18,9 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Checkout open-collaboration-tools
-        uses: actions/checkout@v4
-        with:
-          repository: eclipse-oct/open-collaboration-tools
-          path: open-collaboration-tools
-
-      - name: Build open-collaboration-tools
-        working-directory: open-collaboration-tools
-        run: |
-          npm ci
-          npm run build
-
-      - name: Set OCT project path in gradle.properties
-        run: |
-          sed -i "s|org.typefox.oct-project-path=.*|org.typefox.oct-project-path=${{ github.workspace }}/open-collaboration-tools|" gradle.properties
-
       # Run the build. Gradle will pick up the files we just decoded.
+      # No open-collaboration-tools project path is set, so build.gradle.kts downloads the
+      # prebuilt oct-service-process executables for all supported OSes from its GitHub release.
       - name: Build and Sign Plugin
         env:
           CERTIFICATE_CHAIN: ${{ secrets.JB_CERT_CHAIN_BASE64 }}

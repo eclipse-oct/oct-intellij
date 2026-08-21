@@ -47,3 +47,6 @@ bin/
 src/main/resources/bin/
 private_signing_key.pem
 public_signing_key.pem
+
+.intellijPlatform/
+.kotlin/
