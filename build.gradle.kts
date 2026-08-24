@@ -1,4 +1,5 @@
 import org.apache.tools.ant.taskdefs.condition.Os
+import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.net.URI
 import java.util.Base64
@@ -36,6 +37,17 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "252.28539.54"
+        }
+    }
+}
+
+intellijPlatformTesting {
+    runIde {
+        register("runIde2") {
+            prepareSandboxTask {
+                // Set the custom sandbox path
+                sandboxDirectory.set(layout.buildDirectory.dir("idea-sandbox-2"))
+            }
         }
     }
 }
@@ -139,4 +151,3 @@ tasks.register<Exec>("createServiceProcessExecutable") {
         commandLine("bash", "-il", "-c", "npm run create:executable")
     }
 }
-

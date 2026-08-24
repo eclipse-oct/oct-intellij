@@ -24,18 +24,17 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.JBColor
 import org.typefox.oct.ClientTextSelection
 import org.typefox.oct.OCTSessionService
+import org.typefox.oct.fileSystem.SessionPathMapper
 import org.typefox.oct.messageHandlers.OCTMessageHandler
 import org.typefox.oct.TextDocumentInsert
 import java.awt.Color
 import java.awt.Graphics
 import java.io.FileNotFoundException
-import kotlin.io.path.Path
-import kotlin.io.path.pathString
 
 class EditorManager(
     private val octService: OCTMessageHandler.OCTService,
     val project: Project,
-    private val sessionFileResolver: (String) -> VirtualFile?
+    private val pathMapper: SessionPathMapper
 ) :
     EditorFactoryListener {
     private val editors: MutableMap<String, Editor> = mutableMapOf()
@@ -65,17 +64,14 @@ class EditorManager(
     }
 
     override fun editorReleased(event: EditorFactoryEvent) {
-        val path = octPathFromEditor(event.editor)
+        val path = octPathFromEditor(event.editor) ?: return
         clearPeerDecorations(path, event.editor)
         editors.remove(path)
-        event.editor.document.removeDocumentListener(documentListeners.remove(path)!!)
+        documentListeners.remove(path)?.let { event.editor.document.removeDocumentListener(it) }
     }
 
     private fun registerEditor(editor: Editor) {
-        if(editor.virtualFile == null) {
-            return
-        }
-        val path = octPathFromEditor(editor)
+        val path = octPathFromEditor(editor) ?: return
 
         editors[path] = editor
 
@@ -94,7 +90,7 @@ class EditorManager(
             if (selection.peer == followingPeerId) {
                 invokeLater {
                     val editorManager = FileEditorManager.getInstance(this.project)
-                    val file = sessionFileResolver(path) ?: return@invokeLater
+                    val file = pathMapper.toVirtualFile(path) ?: return@invokeLater
                     editorManager.openFile(file, true)
                     editors[path]?.scrollingModel?.scrollTo(
                         LogicalPosition(selection.start, selection.end ?: selection.start), ScrollType.CENTER)
@@ -104,7 +100,7 @@ class EditorManager(
         }
 
         if(editor != null) {
-            ApplicationManager.getApplication().invokeAndWait {
+            invokeLater {
                 clearPeerDecorations(path, editor)
                 cursorDecorations[path] = Array(selections.size) { idx ->
                     val selection = selections[idx]
@@ -155,38 +151,39 @@ class EditorManager(
         }
     }
 
+    // Notifications arrive on lsp4j's single message-reader thread, one at a time, in order.
+    // Queuing the write via invokeLater (instead of the blocking WriteCommandAction, which does
+    // invokeAndWait) lets that thread return immediately to keep draining incoming messages —
+    // otherwise it can deadlock against the EDT (e.g. a read action blocked on a network round
+    // trip that only this same reader thread can complete). Swing's event queue is FIFO, and
+    // this method is only ever called sequentially from that one thread, so update order is
+    // still preserved across invocations.
     fun updateDocument(path: String, updates: Array<TextDocumentInsert>) {
-        val virtualFile = findFileByRelativePath(path)
-        val document = ApplicationManager.getApplication().runReadAction(Computable {
-            FileDocumentManager.getInstance().getDocument(virtualFile)
+        invokeLater {
+            val virtualFile = findFileByRelativePath(path)
+            val document = FileDocumentManager.getInstance().getDocument(virtualFile)
                 ?: throw IllegalStateException("Document for file $path not found")
-        })
 
-        WriteCommandAction.runWriteCommandAction(
-            project
-        ) {
-            val listener =  documentListeners[path]
-            listener?.sendUpdates = false
-            try {
-                for (update in updates) {
-                    document.replaceString(
-                        update.startOffset,
-                       update.endOffset ?: update.startOffset,
-                        update.text.replace("\r\n", "\n")
-                    )
+            WriteCommandAction.runWriteCommandAction(project) {
+                val listener = documentListeners[path]
+                listener?.sendUpdates = false
+                try {
+                    for (update in updates) {
+                        document.replaceString(
+                            update.startOffset,
+                            update.endOffset ?: update.startOffset,
+                            update.text.replace("\r\n", "\n")
+                        )
+                    }
+                } finally {
+                    listener?.sendUpdates = true
                 }
-            } finally {
-                listener?.sendUpdates = true
             }
         }
     }
 
-    private fun octPathFromEditor(editor: Editor): String {
-        return (editor.virtualFile?.path ?: "").replace(
-            Path(editor.project!!.basePath!!).parent.pathString.replace("\\", "/") + "/",
-            ""
-        )
-    }
+    private fun octPathFromEditor(editor: Editor): String? =
+        editor.virtualFile?.let { pathMapper.toProtocolPath(it) }
 
     fun followPeer(peerId: String) {
         followingPeerId = peerId
@@ -205,7 +202,7 @@ class EditorManager(
     }
 
     private fun findFileByRelativePath(path: String): VirtualFile {
-        return sessionFileResolver(path) ?: throw FileNotFoundException("File not found: $path")
+        return pathMapper.toVirtualFile(path) ?: throw FileNotFoundException("File not found: $path")
     }
 }
 

@@ -20,22 +20,31 @@ import kotlin.io.path.name
 
 class OCTSessionFileSystem : NewVirtualFileSystem() {
 
-    // Maps workspace-folder name → CollaborationInstance for host/service resolution only;
-    // file instances are now owned by PersistentFS.
-    private val roots: MutableMap<String, CollaborationInstance> = mutableMapOf()
+    private data class SessionRoot(val folders: Set<String>, val collaborationInstance: CollaborationInstance)
 
-    fun registerRoots(roots: Array<String>, collaborationInstance: CollaborationInstance) {
-        for (root in roots) {
-            if (this.roots.containsKey(root)) {
-                throw IllegalArgumentException("Root already registered: $root")
-            }
-            this.roots[root] = collaborationInstance
+    // Maps a session-unique root segment (e.g. the sanitized workspace name) → session info.
+    // Every session mounts under its own segment ("oct://<segment>/<folderName>/...") so that two
+    // concurrent sessions never collide, even if their shared folder names are identical.
+    private val sessions: MutableMap<String, SessionRoot> = mutableMapOf()
+
+    fun registerRoots(workspaceName: String, folders: Array<String>, collaborationInstance: CollaborationInstance): String {
+        val base = sanitizeSegment(workspaceName)
+        var segment = base
+        var suffix = 2
+        while (sessions.containsKey(segment)) {
+            segment = "$base-${suffix++}"
         }
+
+        sessions[segment] = SessionRoot(folders.toSet(), collaborationInstance)
         Disposer.register(collaborationInstance) {
-            for (root in roots) {
-                this.roots.remove(root)
-            }
+            sessions.remove(segment)
         }
+        return segment
+    }
+
+    private fun sanitizeSegment(name: String): String {
+        val sanitized = name.replace(Regex("[^A-Za-z0-9_.-]"), "-")
+        return sanitized.ifEmpty { "session" }
     }
 
     override fun getProtocol(): String = "oct"
@@ -58,10 +67,9 @@ class OCTSessionFileSystem : NewVirtualFileSystem() {
         VfsImplUtil.refreshAndFindFileByPath(this, pathString)
 
     // PersistentFS's name cache rejects any string containing a path separator, so the root
-    // path must be the bare folder name — no trailing slash.  NewVirtualFileSystem tokenises
+    // path must be the bare segment name — no trailing slash.  NewVirtualFileSystem tokenises
     // whatever remains of the path after stripping the root prefix, so a leading '/' in the
     // remainder is handled correctly (empty tokens are ignored by StringUtil.tokenize).
-    // Both "workspace" and "workspace/sub/file" therefore resolve to the same root entry.
     override fun extractRootPath(pathString: String): String {
         val normalized = pathString.replace("\\", "/")
         val slashIndex = normalized.indexOf('/')
@@ -81,6 +89,13 @@ class OCTSessionFileSystem : NewVirtualFileSystem() {
 
     override fun getAttributes(file: VirtualFile): FileAttributes? {
         val path = Path(file.path)
+        if (path.nameCount == 1) {
+            // The session's own synthetic root — it doesn't exist on the host, it's just the
+            // parent node under which this session's shared folders are mounted.
+            return if (sessions.containsKey(path.toString()))
+                FileAttributes(true, false, false, false, 0, 0, false)
+            else null
+        }
         val stat = try { stat(path)?.get() } catch (_: Exception) { return null } ?: return null
         return FileAttributes(
             /* isDirectory  */ stat.type == FileType.Directory,
@@ -95,6 +110,9 @@ class OCTSessionFileSystem : NewVirtualFileSystem() {
 
     override fun list(file: VirtualFile): Array<String> {
         val path = Path(file.path)
+        if (path.nameCount == 1) {
+            return sessions[path.toString()]?.folders?.toTypedArray() ?: emptyArray()
+        }
         return try { readDir(path)?.get()?.keys?.toTypedArray() } catch (_: Exception) { null } ?: emptyArray()
     }
 
@@ -201,7 +219,7 @@ class OCTSessionFileSystem : NewVirtualFileSystem() {
         getRemoteFilesystemService(path)?.stat(toOctPath(path), getHostId(path))
 
     fun readFile(path: Path): CompletableFuture<FileContent?> {
-        val instance = roots[path.getName(0).name]
+        val instance = sessions[path.getName(0).name]?.collaborationInstance
             ?: return CompletableFuture.completedFuture(null)
         val service = instance.remoteInterface as? OCTMessageHandler.OCTService
             ?: return CompletableFuture.completedFuture(null)
@@ -212,11 +230,15 @@ class OCTSessionFileSystem : NewVirtualFileSystem() {
         getRemoteFilesystemService(path)?.readDir(toOctPath(path), getHostId(path))
 
     private fun getRemoteFilesystemService(path: Path): FileSystemMessageHandler.FileSystemService? =
-        roots[path.getName(0).name]?.remoteInterface as? FileSystemMessageHandler.FileSystemService
+        sessions[path.getName(0).name]?.collaborationInstance?.remoteInterface as? FileSystemMessageHandler.FileSystemService
 
     private fun getHostId(path: Path): String =
-        roots[path.getName(0).name]?.host?.id ?: ""
+        sessions[path.getName(0).name]?.collaborationInstance?.host?.id ?: ""
 }
 
-fun toOctPath(path: Path): String = path.toString().replace("\\", "/")
-
+/** Strips the leading session-root segment, producing the "<folderName>/<rel>" protocol path. */
+fun toOctPath(path: Path): String {
+    val full = path.toString().replace("\\", "/")
+    val slashIndex = full.indexOf('/')
+    return if (slashIndex < 0) "" else full.substring(slashIndex + 1)
+}

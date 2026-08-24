@@ -8,13 +8,11 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.modules
-import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.ui.DialogBuilder
 import com.intellij.remoteServer.util.CloudConfigurationUtil.createCredentialAttributes
 import com.intellij.ui.components.dialog
-import com.intellij.util.containers.toArray
 import org.typefox.oct.*
+import org.typefox.oct.fileSystem.WorkspaceFileSystemService
 import org.typefox.oct.settings.OCTSettings
 import java.util.concurrent.CompletableFuture
 import javax.swing.JTextField
@@ -22,15 +20,9 @@ import javax.swing.JTextField
 
 class HostSessionAction : AnAction() {
   override fun actionPerformed(e: AnActionEvent) {
-
-    val rootUris =  e.project?.modules?.flatMap {
-      ModuleRootManager.getInstance(it).contentRoots.asIterable()
-    }?.map {
-      it.name
-    }
-    service<OCTSessionService>().createRoom(Workspace("oct-session",
-      rootUris?.toArray(Array(size = rootUris.size, init = { "" })) ?: emptyArray()
-    ), e.project!!)
+    val project = e.project ?: return
+    val workspace = project.service<WorkspaceFileSystemService>().createWorkspace()
+    service<OCTSessionService>().createRoom(workspace, project)
   }
 
     override fun update(e: AnActionEvent) {
