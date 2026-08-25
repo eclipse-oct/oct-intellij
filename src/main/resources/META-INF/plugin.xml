@@ -68,6 +68,7 @@
     <statusBarWidgetFactory implementation="org.typefox.oct.sessionView.OCTSessionStatusBarWidgetFactory"
                             id="org.typefox.oct.sessionView.StatusBarSessionWidget" />
 
+    <welcomeTabFactory implementation="org.typefox.oct.sessionView.OCTWelcomeTabProvider" />
   </extensions>
 
 
