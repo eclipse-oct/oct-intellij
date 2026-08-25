@@ -109,8 +109,12 @@ tasks.register("downloadServiceProcessExecutables") {
         val destFile = File(outputDir, "${target.os}/oct-service-process${target.executableSuffix}")
         url to destFile
     }
+    inputs.property("octServiceProcessVersion", octServiceProcessVersion)
+    outputs.files(downloads.map { it.second })
+    outputs.upToDateWhen { downloads.all { (_, destFile) -> destFile.exists() } }
     doLast {
         downloads.forEach { (url, destFile) ->
+            if (destFile.exists()) return@forEach
             destFile.parentFile.mkdirs()
             URI(url).toURL().openStream().use { input ->
                 destFile.outputStream().use { output -> input.copyTo(output) }
