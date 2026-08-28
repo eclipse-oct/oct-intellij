@@ -1,5 +1,6 @@
 package org.typefox.oct.editor
 
+import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.event.*
 import com.intellij.openapi.project.Project
@@ -31,7 +32,9 @@ class EditorDocumentListener(private val octService: OCTMessageHandler.OCTServic
             )
         }
         if(!isSyncing) {
-            syncDocument(event)
+            invokeLater {
+                syncDocument(event)
+            }
         }
     }
 
