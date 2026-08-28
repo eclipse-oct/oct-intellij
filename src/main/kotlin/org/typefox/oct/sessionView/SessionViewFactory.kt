@@ -167,7 +167,7 @@ class SessionView(private val project: Project): JPanel() {
     }
 }
 
-class NoSessionView(val project: Project): JPanel() {
+class NoSessionView(val project: Project?): JPanel() {
 
     init {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -178,18 +178,21 @@ class NoSessionView(val project: Project): JPanel() {
                 executeAction("org.typefox.oct.JoinSession")
             }
         })
-        add(JButton("Create OCT Session").apply {
-            alignmentX = CENTER_ALIGNMENT
-            addActionListener {
-                executeAction("org.typefox.oct.HostSession")
-            }
-        })
+        if(project != null) {
+            add(JButton("Create OCT Session").apply {
+                alignmentX = CENTER_ALIGNMENT
+                addActionListener {
+                    executeAction("org.typefox.oct.HostSession")
+                }
+            })
+        }
     }
 
     private fun executeAction(actionId: String) {
         val action = ActionManager.getInstance().getAction(actionId)
         if (action != null) {
-            val event = AnActionEvent.createEvent(action, SimpleDataContext.getProjectContext(project), null, ActionPlaces.UNKNOWN, ActionUiKind.NONE, null)
+            val context = if(project == null) SimpleDataContext.builder().build() else SimpleDataContext.getProjectContext(project)
+            val event = AnActionEvent.createEvent(action, context, null, ActionPlaces.UNKNOWN, ActionUiKind.NONE, null)
             ActionUtil.performAction(action, event)
         } else {
             println("Aktion mit ID $actionId nicht gefunden.")
