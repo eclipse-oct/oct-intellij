@@ -118,7 +118,7 @@ class AuthenticationService(private val scope: CoroutineScope) {
 
     private fun handleWebAuth(serverUrl: String, provider: AuthProvider, token: String) {
         BrowserUtil.browse(Urls.newFromEncoded(serverUrl)
-            .resolve(provider.endpoint)
+            .resolve(provider.endpoint.replace(Regex("^/"), ""))
             .addParameters(mutableMapOf(Pair("token", token)))
             .toExternalForm())
     }
