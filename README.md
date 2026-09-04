@@ -1,6 +1,8 @@
 # oct-intellij
 Integration of Open Collaboration Tools with the IntelliJ Platform
 
+available on the JetBrains marketplace at https://plugins.jetbrains.com/plugin/32650-open-collaboration-tools
+
 # Extension Build 
 To build the extension, you need to have 
 [open-collaboration-tools](https://github.com/eclipse-oct/open-collaboration-tools) available on your system.
