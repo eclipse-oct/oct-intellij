@@ -1,5 +1,4 @@
 import org.apache.tools.ant.taskdefs.condition.Os
-import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.net.URI
 import java.util.Base64
@@ -89,7 +88,7 @@ val octProjectPath = (project.findProperty("org.typefox.oct-project-path") as St
 // oct-service-process can't be built per-OS by a JetBrains plugin release, so when no local
 // open-collaboration-tools checkout is configured, download the prebuilt executable for every
 // supported OS from the open-collaboration-tools GitHub release instead.
-val octServiceProcessVersion = "0.3.0"
+val octServiceProcessVersion = "0.3.1"
 val octServiceProcessReleaseUrl =
     "https://github.com/eclipse-oct/open-collaboration-tools/releases/download/service-process-v$octServiceProcessVersion"
 
