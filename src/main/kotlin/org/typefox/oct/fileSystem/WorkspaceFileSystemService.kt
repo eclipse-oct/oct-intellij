@@ -3,6 +3,7 @@ package org.typefox.oct.fileSystem
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.modules
 import com.intellij.openapi.roots.ModuleRootManager
@@ -94,7 +95,16 @@ class WorkspaceFileSystemService(private val project: Project) : SessionPathMapp
                     ?: throw FileNotFoundException("could not find parent directory for $pathString")
                 parentDir.createChildData(this, name)
             }
-            file.writeBytes(fileData.content)
+            // A loaded document is kept in sync via OCT document updates, so it already contains the
+            // guest's edits (they arrive before this request and are applied earlier on the EDT queue).
+            // Saving it instead of writing raw bytes keeps the event a "save" and avoids IntelliJ's
+            // memory/disk conflict dialog when the host's document has unsaved changes.
+            val document = FileDocumentManager.getInstance().getCachedDocument(file)
+            if (document != null) {
+                FileDocumentManager.getInstance().saveDocument(document)
+            } else {
+                file.writeBytes(fileData.content)
+            }
         }
     }
 

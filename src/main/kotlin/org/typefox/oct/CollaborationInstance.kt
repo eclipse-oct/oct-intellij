@@ -8,6 +8,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.module.EmptyModuleType
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleManager
@@ -142,6 +143,16 @@ class CollaborationInstance(val remoteInterface: BaseMessageHandler.BaseRemoteIn
     fun handleVirtualFilesystemChange(event: FileChangeEvent) {
         ApplicationManager.getApplication().executeOnPooledThread {
             for (change in event.changes) {
+                if (change.type == FileChangeEventType.Update) {
+                    // Content of loaded documents is synced via OCT document updates. Refreshing would
+                    // report a non-save disk change for an (always unsaved) document and trigger
+                    // IntelliJ's memory/disk conflict dialog. The parent isn't refreshed either, since a
+                    // directory refresh also re-checks its children's timestamps.
+                    val file = pathMapper.toVirtualFile(change.path)
+                    if (file != null && FileDocumentManager.getInstance().getCachedDocument(file) != null) continue
+                    pathMapper.refreshAndFind(change.path)
+                    continue
+                }
                 val slashIndex = change.path.lastIndexOf('/')
                 val parentPath = if (slashIndex < 0) "" else change.path.substring(0, slashIndex)
                 if (parentPath.isNotEmpty()) {
